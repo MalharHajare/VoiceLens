@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VoiceLens — AI Speech Confidence Coach</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="container">
+  <header>
+    <div class="logo">VoiceLens</div>
+    <div class="tagline">AI Speech Confidence Coach</div>
+    <div class="badge">
+      <div class="badge-dot"></div>
+      Built with IBM Bob × Flask + Python × Whisper × Librosa
+    </div>
+  </header>
+
+  <!-- Status Bar -->
+  <div class="status-bar">
+    <div class="status-left">
+      <div class="status-dot" id="statusDot"></div>
+      <div class="status-text" id="statusText">Checking backend...</div>
+    </div>
+    <button class="connect-btn" onclick="checkBackend()">Connect</button>
+  </div>
+
+  <!-- Settings -->
+  <div class="settings-panel">
+    <div class="settings-grid">
+      <div class="input-group">
+        <label>Backend URL</label>
+        <div class="input-row">
+          <input type="text" id="backendUrl" value="http://localhost:5001" placeholder="http://localhost:5001">
+        </div>
+      </div>
+      <div class="input-group">
+        <label>Hugging Face Token (Optional)</label>
+        <div class="input-row">
+          <input type="password" id="hfToken" placeholder="hf_xxxxxxxxxxxxxxxx">
+          <button class="btn-secondary" onclick="saveHF()">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="error-message" id="errMsg"></div>
+
+  <!-- Recording Card -->
+  <div class="main-card">
+    <div class="card-header">
+      <div class="card-title">Step 1 — Record Your Voice</div>
+    </div>
+
+    <div class="record-section">
+      <button class="record-btn" id="recBtn" onclick="toggleRec()">
+        <svg id="btnIco" viewBox="0 0 24 24">
+          <path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4zm0 2a2 2 0 0 0-2 2v6a2 2 0 0 0 4 0V5a2 2 0 0 0-2-2zm-7 9a7 7 0 0 0 14 0h2a9 9 0 0 1-8 8.94V23h-2v-2.06A9 9 0 0 1 3 12z"/>
+        </svg>
+      </button>
+      <div class="record-info">
+        <h3 id="recTitle">Click to start recording</h3>
+        <p id="recDesc">Speak naturally for 30-90 seconds. We'll analyze your speech patterns in real-time.</p>
+      </div>
+    </div>
+
+    <div class="timer" id="timer">00:00</div>
+    <canvas class="waveform" id="waveCanvas"></canvas>
+
+    <div class="live-transcript" id="liveBox">
+      <div class="transcript-header">
+        <div class="live-dot"></div>
+        Live Transcript
+      </div>
+      <div class="transcript-text">
+        <span id="finalTxt"></span><span class="interim" id="interimTxt"></span>
+      </div>
+    </div>
+
+    <div class="divider">or</div>
+    <div class="sample-selector">
+      <label>Choose Demo Sample:</label>
+      <select id="sampleSelect" class="sample-dropdown">
+        <option value="moderate">Moderate (US) - Needs Improvement</option>
+        <option value="good">Good (UK) - Strong Performance</option>
+        <option value="excellent">Excellent (US) - Professional</option>
+        <option value="therapy">Severe (US) - Therapy Recommended</option>
+      </select>
+      <button class="btn-demo" id="sampleBtn" onclick="loadSample()">▶ Load Selected Sample</button>
+    </div>
+  </div>
+
+  <button class="btn-primary" id="analyseBtn" onclick="runAnalysis()">✦ Analyze Speech</button>
+
+  <!-- Loading -->
+  <div class="loading-panel" id="loadPanel">
+    <div class="spinner"></div>
+    <div class="loading-text">Analyzing your speech...</div>
+    <ul class="loading-steps" id="stepList">
+      <li id="s1">Uploading audio to server</li>
+      <li id="s2">Transcribing with Whisper</li>
+      <li id="s3">Extracting audio features</li>
+      <li id="s4">Scoring fluency and clarity</li>
+      <li id="s5">Generating personalized report</li>
+    </ul>
+  </div>
+
+  <!-- Results -->
+  <div class="results" id="results">
+    <div class="section-title">Your Scores</div>
+    <div class="scores-grid">
+      <div class="score-card">
+        <div class="score-label">Fluency</div>
+        <div class="score-value" id="scF">—</div>
+        <div class="score-bar"><div class="score-fill" id="bF"></div></div>
+      </div>
+      <div class="score-card">
+        <div class="score-label">Clarity</div>
+        <div class="score-value" id="scC">—</div>
+        <div class="score-bar"><div class="score-fill" id="bC"></div></div>
+      </div>
+      <div class="score-card">
+        <div class="score-label">Pace</div>
+        <div class="score-value" id="scP">—</div>
+        <div class="score-bar"><div class="score-fill" id="bP"></div></div>
+      </div>
+      <div class="score-card">
+        <div class="score-label">Confidence</div>
+        <div class="score-value" id="scCo">—</div>
+        <div class="score-bar"><div class="score-fill" id="bCo"></div></div>
+      </div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-chip">Words: <strong id="stW">—</strong></div>
+      <div class="stat-chip">Fillers: <strong id="stF">—</strong></div>
+      <div class="stat-chip">Pace: <strong id="stWPM">—</strong></div>
+      <div class="stat-chip">Duration: <strong id="stD">—</strong></div>
+      <div class="stat-chip">Sentiment: <strong id="stSent">—</strong></div>
+    </div>
+
+    <div class="section-title">Audio Features (Librosa)</div>
+    <div class="audio-features">
+      <div class="feature-chip">Avg Pitch: <strong id="afPitch">—</strong></div>
+      <div class="feature-chip">Silence Ratio: <strong id="afSil">—</strong></div>
+      <div class="feature-chip">Energy Variation: <strong id="afEnergy">—</strong></div>
+    </div>
+
+    <div class="result-card">
+      <h3>Transcript <span style="color:var(--text-dim);font-weight:400;font-size:0.875rem">(fillers highlighted)</span></h3>
+      <div class="transcript-box" id="tOut"></div>
+    </div>
+
+    <div class="result-card">
+      <h3>AI Speech Analysis</h3>
+      <div class="sentiment-bar">
+        <div class="sentiment-fill" id="sentFill"></div>
+      </div>
+      <div class="sentiment-labels">
+        <span>Negative</span>
+        <span>Neutral</span>
+        <span>Positive</span>
+      </div>
+      <div class="ai-text" id="aiOut"></div>
+    </div>
+
+    <div class="result-card">
+      <h3>Speech Patterns Detected</h3>
+      <ul class="patterns-list" id="patOut"></ul>
+    </div>
+
+    <div class="therapy-alert" id="therapyCard">
+      <h3 id="thTitle"></h3>
+      <p id="thText"></p>
+    </div>
+
+    <div class="section-title">Personalized Exercises</div>
+    <div class="exercises-grid" id="exGrid"></div>
+
+    <button class="btn-reset" onclick="resetAll()">↺ Analyze Another Recording</button>
+  </div>
+</div>
+<script>
+// ── State ─────────────────────────────────
+let audioBlob = null, isRec = false, seconds = 0;
+let recognition = null, timerInt = null, animFrame = null;
+let audioCtx = null, analyser = null, dataArr = null, micStream = null;
+let mediaRecorder = null, audioChunks = [];
+
+const FILLERS = ["um","uh","like","you know","kind of","basically","so","right","actually","literally","i mean","you see","sort of"];
+
+const SAMPLE_DATA = {
+  moderate: {
+    text: "Um, so hi everyone. My name is Rahul and, uh, today I wanted to talk about, like, the importance of clear communication in professional settings. You know, I think a lot of people kind of underestimate how much, um, the way we speak actually affects how others perceive us. So basically if you can just, like, reduce these filler words, your confidence will really come through. I've been working on this myself and uh it takes practice but it's definitely, like, worth it. So yeah, that's basically what I wanted to share. Um, thank you.",
+    duration: 44,
+    accent: "US"
+  },
+  good: {
+    text: "Good afternoon everyone. I'm delighted to be here today to discuss the significance of effective communication in the workplace. Research consistently demonstrates that clear articulation and confident delivery substantially enhance professional credibility. Throughout my career, I've observed that individuals who master these skills tend to advance more rapidly. The key is consistent practice and self-awareness. By recording ourselves and identifying areas for improvement, we can make remarkable progress. Thank you for your attention.",
+    duration: 38,
+    accent: "UK"
+  },
+  excellent: {
+    text: "Thank you for joining me today. I want to share insights on professional communication that have transformed my career. Effective speaking isn't just about what you say, it's about how you deliver your message with clarity and conviction. When we eliminate unnecessary fillers and maintain a steady pace, our ideas resonate more powerfully. I've spent years refining these techniques, and the results speak for themselves. Clear communication opens doors, builds trust, and establishes authority. Let's commit to excellence in every conversation.",
+    duration: 42,
+    accent: "US"
+  },
+  therapy: {
+    text: "Um, uh, so like, hi everyone, um, I'm, uh, really, like, nervous right now, you know? Um, I, uh, wanted to, like, talk about, um, communication, but, uh, I'm, like, really struggling, you know? Um, like, every time I, uh, try to, like, speak, um, I just, uh, can't seem to, like, get the words out, you know? Um, it's, uh, really, like, frustrating, um, because, uh, I know what I, like, want to say, but, um, uh, the words just, like, won't come, you know? Um, I think, uh, maybe I, like, need some, um, professional help, you know? Um, uh, yeah, so, like, that's, um, basically it, uh, I guess. Um, thank you, uh, for, like, listening, you know?",
+    duration: 52,
+    accent: "US"
+  }
+};
+
+// ── Load saved settings ───────────────────
+window.addEventListener('load', () => {
+  const saved = localStorage.getItem('hf_token');
+  if (saved) document.getElementById('hfToken').value = saved;
+  checkBackend();
+  drawIdle();
+});
+
+function saveHF() {
+  localStorage.setItem('hf_token', document.getElementById('hfToken').value.trim());
+}
+
+function getBackendUrl() {
+  return document.getElementById('backendUrl').value.trim().replace(/\/$/, '');
+}
+
+// ── Backend health check ──────────────────
+async function checkBackend() {
+  const dot = document.getElementById('statusDot');
+  const txt = document.getElementById('statusText');
+  txt.innerHTML = 'Connecting...';
+  dot.className = 'status-dot';
+  try {
+    const r = await fetch(getBackendUrl() + '/', { signal: AbortSignal.timeout(3000) });
+    await r.json();
+    dot.className = 'status-dot online';
+    txt.innerHTML = '<strong>Backend Online</strong> — Ready to analyze';
+  } catch(e) {
+    dot.className = 'status-dot offline';
+    txt.innerHTML = '<strong>Backend Offline</strong> — Start server with <code>python app_improved.py</code>';
+  }
+}
+
+// ── Waveform ──────────────────────────────
+const canvas = document.getElementById('waveCanvas');
+const c2 = canvas.getContext('2d');
+function drawIdle() {
+  canvas.width = canvas.offsetWidth;
+  canvas.height = 60;
+  c2.clearRect(0,0,canvas.width,canvas.height);
+  c2.strokeStyle = 'rgba(99,102,241,0.2)';
+  c2.lineWidth = 2;
+  c2.beginPath();
+  for(let x=0;x<canvas.width;x++) {
+    const y = canvas.height/2 + Math.sin(x*.03 + Date.now()*.001)*8;
+    x===0 ? c2.moveTo(x,y) : c2.lineTo(x,y);
+  }
+  c2.stroke();
+  if(!isRec) animFrame = requestAnimationFrame(drawIdle);
+}
+function drawLive() {
+  if(!analyser) return;
+  animFrame = requestAnimationFrame(drawLive);
+  analyser.getByteTimeDomainData(dataArr);
+  canvas.width = canvas.offsetWidth;
+  canvas.height = 60;
+  c2.clearRect(0,0,canvas.width,canvas.height);
+  c2.strokeStyle = '#6366f1';
+  c2.lineWidth = 2.5;
+  c2.beginPath();
+  const sl = canvas.width/dataArr.length;
+  for(let i=0;i<dataArr.length;i++){
+    const y=(dataArr[i]/128)*(canvas.height/2);
+    i===0?c2.moveTo(i*sl,y):c2.lineTo(i*sl,y);
+  }
+  c2.stroke();
+}
+
+// ── Recording ─────────────────────────────
+function toggleRec() { isRec ? stopRec() : startRec(); }
+
+async function startRec() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SR) { alert('Use Chrome or Edge for speech recognition.'); return; }
+
+  audioChunks = [];
+  document.getElementById('finalTxt').textContent = '';
+  document.getElementById('interimTxt').textContent = '';
+
+  // Web Speech API for live display
+  recognition = new SR();
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.lang = 'en-US';
+  recognition.onresult = e => {
+    let interim = '';
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      const t = e.results[i][0].transcript;
+      if(e.results[i].isFinal) document.getElementById('finalTxt').textContent += t + ' ';
+      else interim += t;
+    }
+    document.getElementById('interimTxt').textContent = interim;
+  };
+  recognition.onerror = e => { if(e.error!=='aborted') console.warn(e.error); };
+  recognition.onend = () => { if(isRec) recognition.start(); };
+  recognition.start();
+
+  // MediaRecorder captures actual audio blob for Python
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mediaRecorder = new MediaRecorder(micStream);
+    mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+    mediaRecorder.onstop = () => {
+      audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+    };
+    mediaRecorder.start();
+
+    // Waveform
+    audioCtx = new AudioContext();
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 512;
+    dataArr = new Uint8Array(analyser.fftSize);
+    audioCtx.createMediaStreamSource(micStream).connect(analyser);
+    cancelAnimationFrame(animFrame);
+    drawLive();
+  } catch(e) { alert('Microphone access needed.'); return; }
+
+  isRec = true; seconds = 0;
+  document.getElementById('timer').style.display = 'block';
+  timerInt = setInterval(() => {
+    seconds++;
+    document.getElementById('timer').textContent =
+      String(Math.floor(seconds/60)).padStart(2,'0') + ':' + String(seconds%60).padStart(2,'0');
+  }, 1000);
+
+  document.getElementById('recBtn').classList.add('recording');
+  document.getElementById('btnIco').innerHTML = '<rect x="6" y="6" width="12" height="12" rx="2"/>';
+  document.getElementById('recTitle').textContent = 'Recording...';
+  document.getElementById('recDesc').textContent = 'Speak naturally. Click again to stop.';
+  document.getElementById('liveBox').style.display = 'block';
+  document.getElementById('liveBox').classList.add('active');
+}
+
+function stopRec() {
+  isRec = false;
+  if(recognition) { recognition.onend=null; recognition.stop(); }
+  if(mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+  if(micStream) micStream.getTracks().forEach(t=>t.stop());
+  clearInterval(timerInt);
+  cancelAnimationFrame(animFrame);
+  drawIdle();
+  document.getElementById('recBtn').classList.remove('recording');
+  document.getElementById('btnIco').innerHTML = '<path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4zm0 2a2 2 0 0 0-2 2v6a2 2 0 0 0 4 0V5a2 2 0 0 0-2-2zm-7 9a7 7 0 0 0 14 0h2a9 9 0 0 1-8 8.94V23h-2v-2.06A9 9 0 0 1 3 12z"/>';
+  document.getElementById('liveBox').classList.remove('active');
+  document.getElementById('interimTxt').textContent = '';
+  document.getElementById('recTitle').textContent = '✓ Recording saved';
+  document.getElementById('recDesc').textContent = `${seconds}s captured — ready to analyze`;
+  document.getElementById('analyseBtn').style.display = 'block';
+}
+
+// ── Sample ────────────────────────────────
+function loadSample() {
+  const sampleType = document.getElementById('sampleSelect').value;
+  const sample = SAMPLE_DATA[sampleType];
+  
+  // Create a demo blob (server will use its own sample if blob is demo-flagged)
+  audioBlob = new Blob(['demo'], { type: 'audio/demo' });
+  audioBlob._isDemo = true;
+  audioBlob._sampleType = sampleType;
+  seconds = sample.duration;
+  
+  document.getElementById('finalTxt').textContent = sample.text;
+  document.getElementById('liveBox').style.display = 'block';
+  document.getElementById('timer').style.display = 'block';
+  const mins = Math.floor(sample.duration / 60);
+  const secs = sample.duration % 60;
+  document.getElementById('timer').textContent = `${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
+  document.getElementById('recTitle').textContent = `✓ Sample loaded (${sample.accent})`;
+  document.getElementById('recDesc').textContent = 'Demo audio ready to analyze';
+  document.getElementById('sampleBtn').textContent = '✓ Sample Ready';
+  document.getElementById('analyseBtn').style.display = 'block';
+}
+
+// ── Analysis ──────────────────────────────
+async function runAnalysis() {
+  if(!audioBlob) return;
+  hideErr();
+  document.getElementById('analyseBtn').style.display = 'none';
+  document.getElementById('loadPanel').style.display = 'block';
+
+  const ids = ['s1','s2','s3','s4','s5'];
+  let si = 0;
+  function adv() {
+    if(si>0) document.getElementById(ids[si-1]).className='done';
+    if(si<ids.length){ document.getElementById(ids[si]).className='active'; si++; }
+  }
+  adv();
+  await delay(400); adv();
+
+  try {
+    let result;
+    if(audioBlob._isDemo) {
+      // Demo mode: call backend with sample text flag
+      result = await callBackendDemo();
+    } else {
+      // Real mode: send actual audio blob to Python
+      result = await callBackend(audioBlob);
+    }
+    adv(); adv(); adv();
+    await delay(400);
+    document.getElementById('loadPanel').style.display = 'none';
+    renderResults(result);
+  } catch(e) {
+    document.getElementById('loadPanel').style.display = 'none';
+    showErr(`Backend error: ${e.message}. Make sure server is running.`);
+    document.getElementById('analyseBtn').style.display = 'block';
+  }
+}
+
+async function callBackend(blob) {
+  const form = new FormData();
+  form.append('audio', blob, 'recording.webm');
+  const hf = document.getElementById('hfToken').value.trim();
+  if(hf) form.append('hf_token', hf);
+  const r = await fetch(getBackendUrl() + '/analyse', { method: 'POST', body: form });
+  if(!r.ok) { const e = await r.json(); throw new Error(e.error || 'Server error'); }
+  return r.json();
+}
+
+async function callBackendDemo() {
+  const sampleType = audioBlob._sampleType || 'moderate';
+  const sample = SAMPLE_DATA[sampleType];
+  
+  // Send a text-only demo request using a tiny audio blob
+  const form = new FormData();
+  const tiny = new Blob(['demo'], { type: 'audio/webm' });
+  form.append('audio', tiny, 'demo.webm');
+  form.append('demo_mode', 'true');
+  const hf = document.getElementById('hfToken').value.trim();
+  if(hf) form.append('hf_token', hf);
+  // Fall back to local analysis if backend is offline
+  try {
+    const r = await fetch(getBackendUrl() + '/analyse', { method: 'POST', body: form, signal: AbortSignal.timeout(15000) });
+    if(r.ok) return r.json();
+  } catch(e) {}
+  // Local fallback
+  return localFallback(sample.text, sample.duration, sampleType);
+}
+
+function localFallback(text, dur, type) {
+  const words = text.trim().split(/\s+/).length;
+  const wpm = Math.round((words/dur)*60);
+  
+  // Count fillers
+  let fillerCount = 0;
+  const foundFillers = [];
+  FILLERS.forEach(f => {
+    const regex = new RegExp('\\b' + f.replace(/\s+/g,'\\s+') + '\\b', 'gi');
+    const matches = text.match(regex);
+    if(matches) {
+      fillerCount += matches.length;
+      if(!foundFillers.includes(f)) foundFillers.push(f);
+    }
+  });
+  
+  // Generate results based on sample type
+  if(type === 'excellent') {
+    return {
+      transcript: text, duration: formatDuration(dur), duration_seconds: dur,
+      word_count: words, wpm, filler_count: 0, filler_words: [],
+      scores: { fluency: 95, clarity: 92, pace: 88, confidence: 93 },
+      ai_analysis: "Your speech demonstrates <strong>exceptional professional fluency</strong> with masterful command of language structure.\n\n<strong>Zero filler words detected</strong> — this level of preparation and control is rare and impressive.\n\nYour pace of <strong>" + wpm + " wpm</strong> is perfectly calibrated for professional settings. Your <strong>vocal energy variation is excellent</strong> — you naturally emphasize key points which keeps audiences fully engaged.",
+      patterns: [
+        { label:'Exceptional clarity', severity:'low', description:'No fillers detected — professional-grade delivery.' },
+        { label:'Perfect speaking pace', severity:'low', description:wpm + ' wpm — ideal for professional presentations.' },
+        { label:'Excellent pause control', severity:'low', description:'Strategic pauses enhance message delivery.' }
+      ],
+      therapy_recommended: false,
+      therapy_reason: 'Your speech skills are at a professional level. Continue practicing to maintain this excellence.',
+      exercises: [
+        { title:'Advanced storytelling', description:'Practice delivering complex narratives with emotional variation to further enhance engagement.' },
+        { title:'Impromptu speaking', description:'Give 2-minute speeches on random topics to maintain your spontaneous fluency.' },
+        { title:'Mentor others', description:'Teaching others reinforces your own mastery and helps you stay sharp.' }
+      ],
+      sentiment: { label: 'Positive', score: 0.92 },
+      audio_features: { avg_pitch_hz: 145, silence_ratio_pct: 8, energy_variation: 0.045 }
+    };
+  } else if(type === 'good') {
+    return {
+      transcript: text, duration: formatDuration(dur), duration_seconds: dur,
+      word_count: words, wpm, filler_count: 0, filler_words: [],
+      scores: { fluency: 85, clarity: 88, pace: 82, confidence: 84 },
+      ai_analysis: "Your speech shows <strong>strong professional fluency</strong> with excellent command of language structure.\n\n<strong>No filler words detected</strong> — impressive preparation and delivery control.\n\nYour pace of <strong>" + wpm + " wpm</strong> is well-suited for professional communication. Your British accent adds a distinguished quality to your delivery.",
+      patterns: [
+        { label:'Excellent clarity', severity:'low', description:'No fillers — very strong control.' },
+        { label:'Good speaking pace', severity:'low', description:wpm + ' wpm — comfortable and professional.' },
+        { label:'Natural pause rhythm', severity:'low', description:'Well-timed pauses enhance comprehension.' }
+      ],
+      therapy_recommended: false,
+      therapy_reason: 'Your speech is highly effective. Minor refinements through practice will take you to the next level.',
+      exercises: [
+        { title:'Emphasis practice', description:'Record yourself emphasizing different words in the same sentence to add variety.' },
+        { title:'Speed variation', description:'Practice delivering the same content at different paces for different contexts.' },
+        { title:'Audience engagement', description:'Practice maintaining eye contact while speaking to build connection.' }
+      ],
+      sentiment: { label: 'Positive', score: 0.85 },
+      audio_features: { avg_pitch_hz: 138, silence_ratio_pct: 10, energy_variation: 0.038 }
+    };
+  } else if(type === 'therapy') {
+    return {
+      transcript: text, duration: formatDuration(dur), duration_seconds: dur,
+      word_count: words, wpm, filler_count: fillerCount, filler_words: foundFillers,
+      scores: { fluency: 18, clarity: 32, pace: 45, confidence: 25 },
+      ai_analysis: "Your speech shows <strong>significant disfluency patterns</strong> that are impacting communication effectiveness.\n\nYou used <strong>" + fillerCount + " filler words</strong> in a short span — this represents a very high ratio that suggests underlying speech anxiety or processing challenges.\n\nYour pace of <strong>" + wpm + " wpm</strong> combined with excessive fillers indicates you may benefit from professional guidance to develop more effective communication strategies.",
+      patterns: [
+        { label:'Severe filler word use', severity:'high', description:fillerCount + ' fillers detected (' + Math.round((fillerCount/words)*100) + '% ratio) — professional help recommended.' },
+        { label:'Speech anxiety indicators', severity:'high', description:'Pattern suggests significant communication anxiety affecting fluency.' },
+        { label:'Inconsistent pace', severity:'mid', description:'Pace varies significantly, indicating difficulty maintaining flow.' }
+      ],
+      therapy_recommended: true,
+      therapy_reason: 'The frequency and pattern of disfluencies suggest that working with a speech-language pathologist could provide structured, professional support to address underlying challenges. They can help develop specific strategies tailored to your needs.',
+      exercises: [
+        { title:'Breathing exercises', description:'Practice deep breathing before speaking. Inhale for 4 counts, hold for 4, exhale for 6. This reduces anxiety.' },
+        { title:'Slow reading practice', description:'Read aloud at half your normal speed, focusing on completing each word clearly before moving to the next.' },
+        { title:'Professional consultation', description:'Consider scheduling an evaluation with a speech-language pathologist for personalized guidance.' }
+      ],
+      sentiment: { label: 'Negative', score: 0.35 },
+      audio_features: { avg_pitch_hz: 152, silence_ratio_pct: 18, energy_variation: 0.025 }
+    };
+  } else { // moderate (default)
+    return {
+      transcript: text, duration: formatDuration(dur), duration_seconds: dur,
+      word_count: words, wpm, filler_count: fillerCount, filler_words: foundFillers,
+      scores: { fluency: 42, clarity: 65, pace: 72, confidence: 55 },
+      ai_analysis: "Your speech shows <strong>natural conversational qualities</strong> — a solid foundation to build on.\n\nThe most noticeable pattern is <strong>frequent filler word use</strong> (" + foundFillers.slice(0,3).join(', ') + "). These are highly trainable habits.\n\nYour <strong>pace is close to ideal</strong> at " + wpm + " wpm — focus primarily on reducing fillers for the biggest improvement.",
+      patterns: [
+        { label:'High filler word use', severity:'high', description:fillerCount + ' fillers detected (' + Math.round((fillerCount/words)*100) + '% ratio) — ideal is under 3%.' },
+        { label:'Good speaking pace', severity:'low', description:wpm + ' wpm — within the comfortable 120-160 range.' },
+        { label:'Good pause rhythm', severity:'low', description:'Pause rhythm sounds natural and measured.' }
+      ],
+      therapy_recommended: false,
+      therapy_reason: 'Your speech is progressing well — consistent self-practice with the exercises below should yield strong improvement.',
+      exercises: [
+        { title:'Silent pause drill', description:"Record yourself for 60 seconds. Every time you feel the urge to say 'um', pause silently instead." },
+        { title:'Pace variation drill', description:'Read the same paragraph at three speeds: slow, normal, fast. Builds conscious pace control.' },
+        { title:'Mirror session', description:'Give a 30-second introduction without any fillers. Restart every time you use one.' }
+      ],
+      sentiment: { label: 'Neutral', score: 0.52 },
+      audio_features: { avg_pitch_hz: 142, silence_ratio_pct: 12, energy_variation: 0.032 }
+    };
+  }
+}
+
+function formatDuration(seconds) {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
+}
+
+// ── Render ────────────────────────────────
+function renderResults(d) {
+  document.getElementById('results').style.display = 'block';
+
+  // Stats
+  document.getElementById('stW').textContent = d.word_count;
+  document.getElementById('stF').textContent = d.filler_count;
+  document.getElementById('stWPM').textContent = d.wpm + ' wpm';
+  document.getElementById('stD').textContent = d.duration;
+
+  // Sentiment
+  if(d.sentiment) {
+    document.getElementById('stSent').textContent = d.sentiment.label;
+    document.getElementById('stSent').style.color = d.sentiment.label === 'Positive' ? 'var(--good)' : 'var(--bad)';
+    const pct = d.sentiment.label === 'Positive' ? Math.round(d.sentiment.score*100) : Math.round((1-d.sentiment.score)*100);
+    const sf = document.getElementById('sentFill');
+    sf.style.background = d.sentiment.label === 'Positive' ? 'var(--good)' : 'var(--bad)';
+    setTimeout(() => sf.style.width = pct + '%', 200);
+  } else {
+    document.getElementById('stSent').textContent = 'N/A';
+    document.getElementById('sentFill').style.width = '50%';
+    document.getElementById('sentFill').style.background = 'var(--muted)';
+  }
+
+  // Audio features from Librosa
+  document.getElementById('afPitch').textContent = d.audio_features.avg_pitch_hz ? d.audio_features.avg_pitch_hz + ' Hz' : 'N/A';
+  document.getElementById('afSil').textContent = d.audio_features.silence_ratio_pct + '%';
+  document.getElementById('afEnergy').textContent = d.audio_features.energy_variation || 'N/A';
+
+  // Scores
+  setScore('F', d.scores.fluency);
+  setScore('C', d.scores.clarity);
+  setScore('P', d.scores.pace);
+  setScore('Co', d.scores.confidence);
+
+  // Transcript with filler highlights
+  let hl = d.transcript;
+  [...(d.filler_words||[])].sort((a,b)=>b.length-a.length).forEach(f => {
+    const re = new RegExp('\\b('+f.replace(/\s+/g,'\\s+')+'\\b)', 'gi');
+    hl = hl.replace(re, '<span class="fl">$1</span>');
+  });
+  document.getElementById('tOut').innerHTML = hl;
+
+  // AI analysis
+  document.getElementById('aiOut').innerHTML = (d.ai_analysis||'').replace(/\n/g,'<br><br>');
+
+  // Patterns
+  const pl = document.getElementById('patOut'); pl.innerHTML = '';
+  (d.patterns||[]).forEach(p => {
+    const li = document.createElement('li');
+    li.className = 'pattern-item';
+    li.innerHTML = `<span class="severity-badge ${p.severity}">${p.severity}</span><div class="pattern-content"><strong>${p.label}</strong>${p.description}</div>`;
+    pl.appendChild(li);
+  });
+
+  // Therapy
+  const tc = document.getElementById('therapyCard');
+  tc.className = 'therapy-alert ' + (d.therapy_recommended ? 'recommended' : 'not-recommended');
+  document.getElementById('thTitle').textContent = d.therapy_recommended ? '⚠ Professional Therapy May Help' : '✓ Self-Practice is Your Path Forward';
+  document.getElementById('thText').textContent = d.therapy_reason;
+
+  // Exercises
+  const eg = document.getElementById('exGrid'); eg.innerHTML = '';
+  (d.exercises||[]).forEach(ex => {
+    const div = document.createElement('div'); div.className = 'exercise-card';
+    div.innerHTML = `<h4>${ex.title}</h4><p>${ex.description}</p>`;
+    eg.appendChild(div);
+  });
+
+  window.scrollTo({ top: document.getElementById('results').offsetTop - 20, behavior: 'smooth' });
+}
+
+function setScore(k, v) {
+  const el = document.getElementById('sc'+k), bar = document.getElementById('b'+k);
+  el.textContent = v;
+  el.className = 'sc-num ' + (v>=70?'g':v>=50?'w':'b');
+  const col = v>=70?'var(--good)':v>=50?'var(--warn)':'var(--bad)';
+  setTimeout(()=>{ bar.style.width=v+'%'; bar.style.background=col; }, 150);
+}
+
+function showErr(msg) {
+  const el = document.getElementById('errMsg');
+  el.textContent = msg; el.style.display = 'block';
+}
+function hideErr() { document.getElementById('errMsg').style.display = 'none'; }
+
+// ── Reset ─────────────────────────────────
+function resetAll() {
+  audioBlob = null; isRec = false; seconds = 0;
+  if(recognition){ recognition.onend=null; recognition.stop(); }
+  if(mediaRecorder && mediaRecorder.state!=='inactive') mediaRecorder.stop();
+  if(micStream) micStream.getTracks().forEach(t=>t.stop());
+  clearInterval(timerInt); cancelAnimationFrame(animFrame);
+  ['results','loadPanel','liveBox','analyseBtn','errMsg'].forEach(id => {
+    document.getElementById(id).style.display = 'none';
+  });
+  document.getElementById('finalTxt').textContent = '';
+  document.getElementById('interimTxt').textContent = '';
+  document.getElementById('timer').style.display = 'none';
+  document.getElementById('timer').textContent = '00:00';
+  document.getElementById('recTitle').textContent = 'Click to start recording';
+  document.getElementById('recDesc').textContent = 'Speak naturally for 30–90 sec. Chrome transcribes live while Python analyses the audio deeply.';
+  document.getElementById('recBtn').classList.remove('on');
+  document.getElementById('btnIco').innerHTML = '<path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4zm0 2a2 2 0 0 0-2 2v6a2 2 0 0 0 4 0V5a2 2 0 0 0-2-2zm-7 9a7 7 0 0 0 14 0h2a9 9 0 0 1-8 8.94V23h-2v-2.06A9 9 0 0 1 3 12z"/>';
+  document.getElementById('sampleBtn').textContent = '▶ Load sample audio for demo';
+  document.getElementById('sampleBtn').style.color = '';
+  ['s1','s2','s3','s4','s5'].forEach(id => document.getElementById(id).className = '');
+  drawIdle();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function delay(ms) { return new Promise(r=>setTimeout(r,ms)); }
+</script>
+</body>
+</html>

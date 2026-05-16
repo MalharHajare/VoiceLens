@@ -1,0 +1,18 @@
+{
+  "name": "voicelens",
+  "version": "1.0.0",
+  "description": "AI Speech Confidence Coach - Frontend",
+  "scripts": {
+    "deploy": "vercel --prod",
+    "dev": "vercel dev"
+  },
+  "keywords": [
+    "speech-analysis",
+    "ai",
+    "whisper",
+    "voice-coach",
+    "ibm-bob"
+  ],
+  "author": "Built with IBM Bob",
+  "license": "MIT"
+}
