@@ -1,0 +1,28 @@
+# Python backend files (not deployable to Vercel)
+app.py
+app_improved.py
+requirements.txt
+test_whisper.py
+
+# Python environment and cache
+.venv
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.py[cod]
+
+# Development files
+.DS_Store
+.env
+.env.local
+*.log
+
+# Documentation (keep these out of deployment)
+QUICKSTART.md
+DEPLOYMENT.md
+GIT_DEPLOYMENT.md
+VERCEL_QUICKSTART.md
+DEPLOY_NOW.md
